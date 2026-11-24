@@ -263,6 +263,7 @@ function openModal(type) {
   } else if (type === 'trade-list') {
     modalBody.innerHTML = buildTradeListForm();
     qs('#tradeListForm', modalBody).addEventListener('submit', handleTradeListSubmit);
+    prefillEmailField(qs('#tl-email', modalBody));
   } else if (type === 'login') {
     modalBody.innerHTML = buildLoginForm();
     qs('#loginForm', modalBody).addEventListener('submit', handleLoginSubmit);
@@ -299,6 +300,7 @@ function openInquireModal(kitten, action) {
     </form>
   `;
   qs('#inquireForm', modalBody).addEventListener('submit', handleInquireSubmit);
+  prefillEmailField(qs('#inq-email', modalBody));
 }
 
 function buildTradeListForm() {
@@ -412,6 +414,11 @@ function handleLogoutClick() {
   renderAuthControl();
 }
 
+function prefillEmailField(input) {
+  const session = getFakeSession();
+  if (session && input) input.value = session.email;
+}
+
 /* ===== FORM VALIDATION HELPERS ===== */
 function validateField(input, errorEl, message) {
   if (!input || !input.value.trim()) {
@@ -468,6 +475,7 @@ function handleLoginSubmit(e) {
   const email = emailInput.value.trim();
   setFakeSession(email);
   identifyFakeSession(email);
+  prefillEmailField(qs('#email'));
   closeModal();
   renderAuthControl();
 }
@@ -538,5 +546,6 @@ function initMobileNav() {
 
   const session = getFakeSession();
   if (session) identifyFakeSession(session.email);
+  prefillEmailField(qs('#email'));
   renderAuthControl();
 })();

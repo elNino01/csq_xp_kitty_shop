@@ -4,6 +4,9 @@
 
 'use strict';
 
+// CSQ loader (index.html) injects the tracker script but doesn't declare this queue itself.
+window._uxa = window._uxa || [];
+
 /* ===== DATA ===== */
 const KITTENS = {
   buy: [
@@ -260,6 +263,10 @@ function openModal(type) {
   } else if (type === 'trade-list') {
     modalBody.innerHTML = buildTradeListForm();
     qs('#tradeListForm', modalBody).addEventListener('submit', handleTradeListSubmit);
+    prefillEmailField(qs('#tl-email', modalBody));
+  } else if (type === 'login') {
+    modalBody.innerHTML = buildLoginForm();
+    qs('#loginForm', modalBody).addEventListener('submit', handleLoginSubmit);
   }
 }
 
@@ -293,6 +300,7 @@ function openInquireModal(kitten, action) {
     </form>
   `;
   qs('#inquireForm', modalBody).addEventListener('submit', handleInquireSubmit);
+  prefillEmailField(qs('#inq-email', modalBody));
 }
 
 function buildTradeListForm() {
@@ -330,6 +338,21 @@ function buildTradeListForm() {
   `;
 }
 
+function buildLoginForm() {
+  return `
+    <h2>👋 Log In</h2>
+    <p>Enter your email to personalize your KittyShop experience.</p>
+    <form class="contact-form" id="loginForm" novalidate>
+      <div class="form-group">
+        <label for="login-email">Email</label>
+        <input type="email" id="login-email" placeholder="you@example.com" required />
+        <span class="field-error" id="login-email-error"></span>
+      </div>
+      <button type="submit" class="btn btn-primary">Log In</button>
+    </form>
+  `;
+}
+
 function closeModal() {
   overlay.classList.remove('open');
   document.body.style.overflow = '';
@@ -338,6 +361,63 @@ function closeModal() {
 modalClose.addEventListener('click', closeModal);
 overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+/* ===== FAKE AUTH (CSQ identify) ===== */
+const FAKE_SESSION_KEY = 'kittyshop_fake_session';
+
+function getFakeSession() {
+  const raw = localStorage.getItem(FAKE_SESSION_KEY);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed.email === 'string' ? parsed : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function setFakeSession(email) {
+  localStorage.setItem(FAKE_SESSION_KEY, JSON.stringify({ email }));
+}
+
+function clearFakeSession() {
+  localStorage.removeItem(FAKE_SESSION_KEY);
+}
+
+function identifyFakeSession(email) {
+  window._uxa.push(['identify', email, { hash: true }]);
+}
+
+function resetFakeIdentity() {
+  window._uxa.push(['resetIdentity']);
+}
+
+function renderAuthControl() {
+  const container = qs('#authControl');
+  const session = getFakeSession();
+
+  container.innerHTML = session
+    ? '<span class="auth-email"></span><button type="button" class="btn btn-outline" data-action="logout">Logout</button>'
+    : '<button type="button" class="btn btn-outline" data-action="login">Login</button>';
+
+  if (session) {
+    qs('.auth-email', container).textContent = session.email;
+    qs('[data-action="logout"]', container).addEventListener('click', handleLogoutClick);
+  } else {
+    qs('[data-action="login"]', container).addEventListener('click', () => openModal('login'));
+  }
+}
+
+function handleLogoutClick() {
+  resetFakeIdentity();
+  clearFakeSession();
+  renderAuthControl();
+}
+
+function prefillEmailField(input) {
+  const session = getFakeSession();
+  if (session && input) input.value = session.email;
+}
 
 /* ===== FORM VALIDATION HELPERS ===== */
 function validateField(input, errorEl, message) {
@@ -384,6 +464,20 @@ function handleTradeListSubmit(e) {
   if (!nameOk || !emailOk || !kittenOk || !wantsOk) return;
   qs('#tl-success', form).textContent = '✅ Listing submitted! It will appear on the trade board within 24 hours.';
   setTimeout(closeModal, 2500);
+}
+
+function handleLoginSubmit(e) {
+  e.preventDefault();
+  const form = e.currentTarget;
+  const emailInput = qs('#login-email', form);
+  const emailOk = validateEmail(emailInput, qs('#login-email-error', form));
+  if (!emailOk) return;
+  const email = emailInput.value.trim();
+  setFakeSession(email);
+  identifyFakeSession(email);
+  prefillEmailField(qs('#email'));
+  closeModal();
+  renderAuthControl();
 }
 
 /* ===== CONTACT FORM ===== */
@@ -449,4 +543,9 @@ function initMobileNav() {
   initFilters();
   initStats();
   initMobileNav();
+
+  const session = getFakeSession();
+  if (session) identifyFakeSession(session.email);
+  prefillEmailField(qs('#email'));
+  renderAuthControl();
 })();
